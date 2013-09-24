@@ -35,6 +35,7 @@ module ActiveRecord
         # * +add_new_at+ - specifies whether objects get added to the :top or :bottom of the list. (default: +bottom+)
         #                   `nil` will result in new items not being added to the list on create
         def acts_as_list(options = {})
+
           configuration = { column: "position", scope: "1 = 1", top_of_list: 1, add_new_at: :bottom}
           configuration.update(options) if options.is_a?(Hash)
 
@@ -111,7 +112,7 @@ module ActiveRecord
             before_destroy :reload_position
             after_destroy :decrement_positions_on_lower_items
             before_update :check_scope
-            after_update :update_positions
+            before_validation :update_positions
 
             scope :in_list, lambda { where("#{table_name}.#{configuration[:column]} IS NOT NULL") }
           EOV
@@ -430,7 +431,7 @@ module ActiveRecord
           end
 
           def check_scope
-            if scope_changed?
+            if scope_changed? && !id_changed?
               swap_changed_attributes
               send('decrement_positions_on_lower_items') if lower_item
               swap_changed_attributes
