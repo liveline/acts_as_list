@@ -35,9 +35,13 @@ module ActiveRecord
         # * +add_new_at+ - specifies whether objects get added to the :top or :bottom of the list. (default: +bottom+)
         #                   `nil` will result in new items not being added to the list on create
         def acts_as_list(options = {})
-
           configuration = { column: "position", scope: "1 = 1", top_of_list: 1, add_new_at: :bottom}
           configuration.update(options) if options.is_a?(Hash)
+
+          options[:update_positions_callback] ||= :after_update
+          options[:check_scope_callback] ||= :before_update
+          options[:reload_position_callback] ||= :before_destroy
+          options[:decrement_positions_callback] ||= :after_destroy
 
           configuration[:scope] = "#{configuration[:scope]}_id".intern if configuration[:scope].is_a?(Symbol) && configuration[:scope].to_s !~ /_id$/
 
@@ -100,6 +104,10 @@ module ActiveRecord
               '#{configuration[:add_new_at]}'
             end
 
+            def callback_options
+              #{options}
+            end
+
             #{scope_methods}
 
             # only add to attr_accessible
@@ -109,10 +117,10 @@ module ActiveRecord
               attr_accessible :#{configuration[:column]}
             end
 
-            before_destroy :reload_position
-            after_destroy :decrement_positions_on_lower_items
-            before_update :check_scope
-            before_validation :update_positions
+            #{options[:reload_position_callback].to_s} :reload_position
+            #{options[:decrement_positions_callback].to_s} :decrement_positions_on_lower_items
+            #{options[:check_scope_callback].to_s} :check_scope
+            #{options[:update_positions_callback].to_s} :update_positions
 
             scope :in_list, lambda { where("#{table_name}.#{configuration[:column]} IS NOT NULL") }
           EOV
@@ -431,12 +439,13 @@ module ActiveRecord
           end
 
           def check_scope
-            if scope_changed? && !id_changed?
+            if scope_changed? && !id_changed? && callback_options[:update_positions_callback] == :after_update
               swap_changed_attributes
               send('decrement_positions_on_lower_items') if lower_item
               swap_changed_attributes
               send("add_to_list_#{add_new_at}")
             end
+            
           end
 
           def reload_position

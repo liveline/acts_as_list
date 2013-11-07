@@ -79,6 +79,10 @@ class TopAdditionMixin < Mixin
   acts_as_list column: "pos", add_new_at: :top, scope: :parent_id
 end
 
+class UpdatePositionsBeforeValidationMixin < Mixin
+  acts_as_list column: "pos", :update_positions_callback => :before_validation
+end
+
 class NoAdditionMixin < Mixin
   acts_as_list column: "pos", add_new_at: nil, scope: :parent_id
 end
@@ -256,6 +260,50 @@ class DefaultScopedTest < ActsAsListTestCase
     DefaultScopedMixin.where(id: 1).first.set_list_position(1)
     assert_equal [1, 2, 3, 4], DefaultScopedMixin.all.map(&:id)
   end
+end
+
+class UpdatePositionsBeforeValidationTest < ActsAsListTestCase
+
+  def setup
+    setup_db
+    (1..4).each { |counter| UpdatePositionsBeforeValidationMixin.create!({pos: counter}) }
+  end
+
+  def test_insert
+    five = UpdatePositionsBeforeValidationMixin.create
+    assert_equal 5, five.pos
+    assert !five.first?
+    assert five.last?
+
+    six = UpdatePositionsBeforeValidationMixin.create
+    assert_equal 6, six.pos
+    assert !six.first?
+    assert six.last?
+
+    seven = UpdatePositionsBeforeValidationMixin.create
+    assert_equal 7, seven.pos
+    assert !seven.first?
+    assert seven.last?
+
+    eight = UpdatePositionsBeforeValidationMixin.create(:pos => 1)
+    assert eight.first?
+    assert !eight.last?
+    assert seven.reload.last?
+
+  end
+
+  def test_update_positions_with_before_validation
+    assert_equal [1, 2, 3, 4], UpdatePositionsBeforeValidationMixin.all.map(&:id)
+    UpdatePositionsBeforeValidationMixin.where(id: 2).first.set_list_position(4)
+    assert_equal [1, 4, 3, 2], UpdatePositionsBeforeValidationMixin.all.map(&:pos)
+    UpdatePositionsBeforeValidationMixin.where(id: 2).first.set_list_position(2)
+    assert_equal [1, 2, 3, 4], UpdatePositionsBeforeValidationMixin.all.map(&:id)
+    UpdatePositionsBeforeValidationMixin.where(id: 1).first.set_list_position(4)
+    assert_equal [1, 2, 3, 4], UpdatePositionsBeforeValidationMixin.all.map(&:id)
+    UpdatePositionsBeforeValidationMixin.where(id: 1).first.set_list_position(1)
+    assert_equal [1, 2, 3, 4], UpdatePositionsBeforeValidationMixin.all.map(&:id)
+  end
+
 end
 
 class DefaultScopedWhereTest < ActsAsListTestCase
